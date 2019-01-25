@@ -90,9 +90,10 @@ func newTestProtocolManagerMust(t *testing.T, mode downloader.SyncMode, blocks i
 
 // testTxPool is a fake, helper transaction pool for testing purposes
 type testTxPool struct {
-	txFeed event.Feed
-	pool   map[common.Hash]*types.Transaction // Hash map of collected transactions
-	added  chan<- []*types.Transaction        // Notification channel for new transactions
+	txFeed             event.Feed
+	pendingLocalTxFeed event.Feed
+	pool               map[common.Hash]*types.Transaction // Hash map of collected transactions
+	added              chan<- []*types.Transaction        // Notification channel for new transactions
 
 	lock sync.RWMutex // Protects the transaction pool
 }
@@ -149,6 +150,10 @@ func (p *testTxPool) Pending() (map[common.Address]types.Transactions, error) {
 
 func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return p.txFeed.Subscribe(ch)
+}
+
+func (p *testTxPool) SubscribePendingLocalTxsEvent(ch chan<- core.PendingLocalTxsEvent) event.Subscription {
+	return p.pendingLocalTxFeed.Subscribe(ch)
 }
 
 // newTestTransaction create a new dummy transaction.

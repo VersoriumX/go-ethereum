@@ -804,6 +804,18 @@ func (ps *peerSet) BestPeer() *peer {
 	return bestPeer
 }
 
+// Clone clones a peers
+func (ps *peerSet) Clone() []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		list = append(list, p)
+	}
+	return list
+}
+
 // Close disconnects all peers.
 // No new peers can be registered after Close has returned.
 func (ps *peerSet) Close() {
