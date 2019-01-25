@@ -145,10 +145,11 @@ type blockChain interface {
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
-	Locals    []common.Address // Addresses that should be treated by default as local
-	NoLocals  bool             // Whether local transaction handling should be disabled
-	Journal   string           // Journal of local transactions to survive node restarts
-	Rejournal time.Duration    // Time interval to regenerate the local transaction journal
+	Locals                  []common.Address // Addresses that should be treated by default as local
+	NoLocals                bool             // Whether local transaction handling should be disabled
+	Journal                 string           // Journal of local transactions to survive node restarts
+	Rejournal               time.Duration    // Time interval to regenerate the local transaction journal
+	BroadcastPendingLocalTx time.Duration    // Time interval to broadcast the local transaction
 
 	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
 	PriceBump  uint64 // Minimum price bump percentage to replace an already existing transaction (nonce)
@@ -164,8 +165,9 @@ type TxPoolConfig struct {
 // DefaultTxPoolConfig contains the default configurations for the transaction
 // pool.
 var DefaultTxPoolConfig = TxPoolConfig{
-	Journal:   "transactions.rlp",
-	Rejournal: time.Hour,
+	Journal:                 "transactions.rlp",
+	Rejournal:               time.Hour,
+	BroadcastPendingLocalTx: 5 * time.Minute,
 
 	PriceLimit: 1,
 	PriceBump:  10,
@@ -185,6 +187,10 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 	if conf.Rejournal < time.Second {
 		log.Warn("Sanitizing invalid txpool journal time", "provided", conf.Rejournal, "updated", time.Second)
 		conf.Rejournal = time.Second
+	}
+	if conf.BroadcastPendingLocalTx < time.Second {
+		log.Warn("Sanitizing invalid txpool broadcast local tx time", "provided", conf.BroadcastPendingLocalTx, "updated", time.Second)
+		conf.BroadcastPendingLocalTx = time.Second
 	}
 	if conf.PriceLimit < 1 {
 		log.Warn("Sanitizing invalid txpool price limit", "provided", conf.PriceLimit, "updated", DefaultTxPoolConfig.PriceLimit)
@@ -225,15 +231,16 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config       TxPoolConfig
-	chainconfig  *params.ChainConfig
-	chain        blockChain
-	gasPrice     *big.Int
-	txFeed       event.Feed
-	queuedTxFeed event.Feed
-	scope        event.SubscriptionScope
-	signer       types.Signer
-	mu           sync.RWMutex
+	config             TxPoolConfig
+	chainconfig        *params.ChainConfig
+	chain              blockChain
+	gasPrice           *big.Int
+	txFeed             event.Feed
+	queuedTxFeed       event.Feed
+	pendingLocalTxFeed event.Feed
+	scope              event.SubscriptionScope
+	signer             types.Signer
+	mu                 sync.RWMutex
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 
@@ -339,6 +346,9 @@ func (pool *TxPool) loop() {
 	defer evict.Stop()
 	defer journal.Stop()
 
+	pendingLocalTxs := time.NewTicker(pool.config.BroadcastPendingLocalTx)
+	defer pendingLocalTxs.Stop()
+
 	for {
 		select {
 		// Handle ChainHeadEvent
@@ -391,6 +401,23 @@ func (pool *TxPool) loop() {
 				}
 				pool.mu.Unlock()
 			}
+
+		case <-pendingLocalTxs.C:
+			pool.mu.RLock()
+			lTxs := types.Transactions{}
+			for addr, list := range pool.pending {
+				// grab local transactions
+				if !pool.locals.contains(addr) {
+					continue
+				}
+
+				lTxs = append(lTxs, list.Flatten()...)
+			}
+			pool.mu.RUnlock()
+
+			if len(lTxs) != 0 {
+				go pool.pendingLocalTxFeed.Send(PendingLocalTxsEvent{lTxs})
+			}
 		}
 	}
 }
@@ -420,6 +447,12 @@ func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscripti
 // starts sending event to the given channel.
 func (pool *TxPool) SubscribeNewQueuedTxsEvent(ch chan<- NewQueuedTxsEvent) event.Subscription {
 	return pool.scope.Track(pool.queuedTxFeed.Subscribe(ch))
+}
+
+// SubscribePendingLocalTxsEvent registers a subscription of NewTxsEvent and
+// starts sending event to the given channel.
+func (pool *TxPool) SubscribePendingLocalTxsEvent(ch chan<- PendingLocalTxsEvent) event.Subscription {
+	return pool.scope.Track(pool.pendingLocalTxFeed.Subscribe(ch))
 }
 
 // GasPrice returns the current gas price enforced by the transaction pool.
