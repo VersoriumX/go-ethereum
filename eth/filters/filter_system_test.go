@@ -43,6 +43,7 @@ type testBackend struct {
 	db              ethdb.Database
 	sections        uint64
 	txFeed          event.Feed
+	queuedTxFeed *event.Feed
 	logsFeed        event.Feed
 	rmLogsFeed      event.Feed
 	pendingLogsFeed event.Feed
@@ -103,6 +104,10 @@ func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types
 
 func (b *testBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return b.txFeed.Subscribe(ch)
+}
+
+func (b *testBackend) SubscribeNewQueuedTxsEvent(ch chan<- core.NewQueuedTxsEvent) event.Subscription {
+	return b.queuedTxFeed.Subscribe(ch)
 }
 
 func (b *testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
@@ -167,6 +172,7 @@ func TestBlockSubscription(t *testing.T) {
 		genesis     = new(core.Genesis).MustCommit(db)
 		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
+		queuedTxFeed = new(event.Feed)
 	)
 
 	for _, blk := range chain {
@@ -216,6 +222,7 @@ func TestPendingTxFilter(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
 		api     = NewPublicFilterAPI(backend, false)
+		queuedTxFeed = new(event.Feed)
 
 		transactions = []*types.Transaction{
 			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
@@ -264,6 +271,68 @@ func TestPendingTxFilter(t *testing.T) {
 	}
 }
 
+// TestQueuedTxFilter tests whether pending tx filters retrieve all queued transactions that are posted to the event mux.
+func TestQueuedTxFilter(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mux          = new(event.TypeMux)
+		db           = rawdb.NewMemoryDatabase()
+		txFeed       = new(event.Feed)
+		queuedTxFeed = new(event.Feed)
+		rmLogsFeed   = new(event.Feed)
+		logsFeed     = new(event.Feed)
+		chainFeed    = new(event.Feed)
+		backend      = &testBackend{mux, db, 0, txFeed, queuedTxFeed, rmLogsFeed, logsFeed, chainFeed}
+		api          = NewPublicFilterAPI(backend, false)
+
+		transactions = []*types.Transaction{
+			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+			types.NewTransaction(5, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+			types.NewTransaction(7, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+			types.NewTransaction(8, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+			types.NewTransaction(10, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
+		}
+
+		txs []*types.Transaction
+	)
+
+	fid0 := api.NewQueuedTransactionFilter()
+
+	time.Sleep(1 * time.Second)
+	queuedTxFeed.Send(core.NewQueuedTxsEvent{Txs: transactions})
+
+	timeout := time.Now().Add(1 * time.Second)
+	for {
+		results, err := api.GetFilterChanges(fid0)
+		if err != nil {
+			t.Fatalf("Unable to retrieve logs: %v", err)
+		}
+
+		tx := results.([]*types.Transaction)
+		txs = append(txs, tx...)
+		if len(txs) >= len(transactions) {
+			break
+		}
+		// check timeout
+		if time.Now().After(timeout) {
+			break
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if len(txs) != len(transactions) {
+		t.Errorf("invalid number of transactions, want %d transactions(s), got %d", len(transactions), len(txs))
+		return
+	}
+	for i := range txs {
+		if txs[i].Hash() != transactions[i].Hash() {
+			t.Errorf("hashes[%d] invalid, want %x, got %x", i, transactions[i].Hash(), txs[i].Hash())
+		}
+	}
+}
+
 // TestLogFilterCreation test whether a given filter criteria makes sense.
 // If not it must return an error.
 func TestLogFilterCreation(t *testing.T) {
@@ -271,6 +340,7 @@ func TestLogFilterCreation(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
 		api     = NewPublicFilterAPI(backend, false)
+		queuedTxFeed = new(event.Feed)
 
 		testCases = []struct {
 			crit    FilterCriteria
@@ -315,6 +385,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
 		api     = NewPublicFilterAPI(backend, false)
+		queuedTxFeed = new(event.Feed)
 	)
 
 	// different situations where log filter creation should fail.
@@ -338,6 +409,7 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 		backend   = &testBackend{db: db}
 		api       = NewPublicFilterAPI(backend, false)
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+		queuedTxFeed = new(event.Feed)
 	)
 
 	// Reason: Cannot specify both BlockHash and FromBlock/ToBlock)
@@ -362,6 +434,7 @@ func TestLogFilter(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
 		api     = NewPublicFilterAPI(backend, false)
+		queuedTxFeed = new(event.Feed)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -476,6 +549,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
 		api     = NewPublicFilterAPI(backend, false)
+		queuedTxFeed = new(event.Feed)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")

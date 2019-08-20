@@ -666,6 +666,13 @@ func (fb *filterBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.
 	return nullSubscription()
 }
 
+func (fb *filterBackend) SubscribeNewQueuedTxsEvent(ch chan<- core.NewQueuedTxsEvent) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
 func (fb *filterBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return fb.bc.SubscribeChainEvent(ch)
 }

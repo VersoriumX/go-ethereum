@@ -225,14 +225,15 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config      TxPoolConfig
-	chainconfig *params.ChainConfig
-	chain       blockChain
-	gasPrice    *big.Int
-	txFeed      event.Feed
-	scope       event.SubscriptionScope
-	signer      types.Signer
-	mu          sync.RWMutex
+	config       TxPoolConfig
+	chainconfig  *params.ChainConfig
+	chain        blockChain
+	gasPrice     *big.Int
+	txFeed       event.Feed
+	queuedTxFeed event.Feed
+	scope        event.SubscriptionScope
+	signer       types.Signer
+	mu           sync.RWMutex
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 
@@ -415,6 +416,12 @@ func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscripti
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
+// SubscribeNewQueuedTxsEvent registers a subscription of NewQueuedTxsEvent and
+// starts sending event to the given channel.
+func (pool *TxPool) SubscribeNewQueuedTxsEvent(ch chan<- NewQueuedTxsEvent) event.Subscription {
+	return pool.scope.Track(pool.queuedTxFeed.Subscribe(ch))
+}
+
 // GasPrice returns the current gas price enforced by the transaction pool.
 func (pool *TxPool) GasPrice() *big.Int {
 	pool.mu.RLock()
@@ -590,6 +597,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		invalidTxMeter.Mark(1)
 		return false, err
 	}
+
+	// Broadcast a new tx anyway if it's valid
+	go pool.queuedTxFeed.Send(NewQueuedTxsEvent{types.Transactions{tx}})
+
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
