@@ -127,7 +127,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		if i%20 == 0 {
 			db.Close()
 			db, _ = rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "")
-			backend = &testBackend{db: db, sections: cnt}
+			backend = &testBackend{db: db}
 		}
 		var addr common.Address
 		addr[0] = byte(i)
