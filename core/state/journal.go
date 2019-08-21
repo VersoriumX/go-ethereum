@@ -130,6 +130,9 @@ type (
 	touchChange struct {
 		account *common.Address
 	}
+	addTransferLogChange struct {
+		txhash common.Hash
+	}
 )
 
 func (ch createObjectChange) revert(s *StateDB) {
@@ -232,5 +235,18 @@ func (ch addPreimageChange) revert(s *StateDB) {
 }
 
 func (ch addPreimageChange) dirtied() *common.Address {
+	return nil
+}
+
+func (ch addTransferLogChange) revert(s *StateDB) {
+	transferLogs := s.transferLogs[ch.txhash]
+	if len(transferLogs) == 1 {
+		delete(s.transferLogs, ch.txhash)
+	} else {
+		s.transferLogs[ch.txhash] = transferLogs[:len(transferLogs)-1]
+	}
+}
+
+func (ch addTransferLogChange) dirtied() *common.Address {
 	return nil
 }
