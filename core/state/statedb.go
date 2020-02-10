@@ -102,7 +102,6 @@ type StateDB struct {
 	nextRevisionId int
 
 	// Measurements gathered during execution for debugging purposes
-<<<<<<< HEAD
 	AccountReads         time.Duration
 	AccountHashes        time.Duration
 	AccountUpdates       time.Duration
@@ -114,7 +113,8 @@ type StateDB struct {
 	SnapshotAccountReads time.Duration
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
-	// transferLogs records trasfer logs for each transaction.
+
+	// transferLogs records transfer logs for each transaction.
 	transferLogs map[common.Hash][]*types.TransferLog
 }
 

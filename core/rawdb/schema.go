@@ -53,9 +53,8 @@ var (
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
-	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
-	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
-
+	blockBodyPrefix        = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
+	blockReceiptsPrefix    = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 	blockTranferLogsPrefix = []byte("f") // blockTranferLogsPrefix + num (uint64 big endian) + hash -> block transfer logs
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
@@ -91,16 +90,20 @@ const (
 
 	// freezerDifficultyTable indicates the name of the freezer total difficulty table.
 	freezerDifficultyTable = "diffs"
+
+	// freezerTransferLogTable indicates the name of the freezer transfer logs table.
+	freezerTransferLogTable = "transfers"
 )
 
 // freezerNoSnappy configures whether compression is disabled for the ancient-tables.
 // Hashes and difficulties don't compress well.
 var freezerNoSnappy = map[string]bool{
-	freezerHeaderTable:     false,
-	freezerHashTable:       true,
-	freezerBodiesTable:     false,
-	freezerReceiptTable:    false,
-	freezerDifficultyTable: true,
+	freezerHeaderTable:      false,
+	freezerHashTable:        true,
+	freezerBodiesTable:      false,
+	freezerReceiptTable:     false,
+	freezerDifficultyTable:  true,
+	freezerTransferLogTable: false,
 }
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -151,6 +154,11 @@ func blockBodyKey(number uint64, hash common.Hash) []byte {
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// blockTransferLogsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
+func blockTransferLogsKey(number uint64, hash common.Hash) []byte {
+	return append(append(blockTranferLogsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
 // txLookupKey = txLookupPrefix + hash
