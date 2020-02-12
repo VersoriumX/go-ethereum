@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -1127,7 +1128,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				}
 				h := rawdb.ReadCanonicalHash(bc.db, frozen)
 				b := rawdb.ReadBlock(bc.db, h, frozen)
-				size += rawdb.WriteAncientBlock(bc.db, b, rawdb.ReadReceipts(bc.db, h, frozen, bc.chainConfig), rawdb.ReadTd(bc.db, h, frozen), rawdb.ReadTransferLogs(bc.db, h, frozen))
+				l, _ := rawdb.ReadTransferLogs(bc.db, h, frozen)
+				size += rawdb.WriteAncientBlock(bc.db, b, rawdb.ReadReceipts(bc.db, h, frozen, bc.chainConfig), rawdb.ReadTd(bc.db, h, frozen), l)
 				count += 1
 
 				// Always keep genesis block in active database.
@@ -2318,18 +2320,18 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 }
 
 // GetTransferLogs retrieves the transfer logs for all transactions in a given block.
-func (bc *BlockChain) GetTransferLogs(hash common.Hash) []*types.TransferLog {
+func (bc *BlockChain) GetTransferLogs(hash common.Hash) ([]*types.TransferLog, error) {
 	if transferLogs, ok := bc.transferLogsCache.Get(hash); ok {
-		return transferLogs.([]*types.TransferLog)
+		return transferLogs.([]*types.TransferLog), nil
 	}
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
 	if number == nil {
-		return nil
+		return nil, ethereum.NotFound
 	}
-	transferLogs := rawdb.ReadTransferLogs(bc.db, hash, *number)
-	if transferLogs == nil {
-		return nil
+	transferLogs, err := rawdb.ReadTransferLogs(bc.db, hash, *number)
+	if err != nil {
+		return nil, err
 	}
 	bc.transferLogsCache.Add(hash, transferLogs)
-	return transferLogs
+	return transferLogs, nil
 }
