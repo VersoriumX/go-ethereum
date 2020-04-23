@@ -1,4 +1,3 @@
-// TODO(gaga): resolve conflict
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -808,8 +807,6 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 		return nil, 0, false, err
 	}
 
-<<<<<<< HEAD
-=======
 	return call(ctx, state, header, b, args, overrides, vmCfg, timeout, globalGasCap)
 }
 
@@ -827,7 +824,7 @@ func call(ctx context.Context, state *state.StateDB, header *types.Header, b Bac
 	} else {
 		addr = *args.From
 	}
->>>>>>> 9f7611157... *: add GetTransferLogs/GetTotalDifficulty/GetBlockReceipts/SubscribeNewQueuedTxsEvent apis
+
 	// Override the fields of specified contracts before execution.
 	for addr, account := range overrides {
 		// Override account nonce.
