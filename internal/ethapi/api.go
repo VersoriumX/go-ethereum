@@ -815,6 +815,7 @@ func call(ctx context.Context, state *state.StateDB, header *types.Header, b Bac
 
 	// Set sender address or use a default if none specified
 	var addr common.Address
+	fmt.Println(addr)
 	if args.From == nil {
 		if wallets := b.AccountManager().Wallets(); len(wallets) > 0 {
 			if accounts := wallets[0].Accounts(); len(accounts) > 0 {
