@@ -96,7 +96,7 @@ type EventSystem struct {
 
 	// Subscriptions
 	txsSub         event.Subscription // Subscription for new transaction event
-	queuedTxsSub  event.Subscription         // Subscription for new queued transaction event
+	queuedTxsSub   event.Subscription // Subscription for new queued transaction event
 	logsSub        event.Subscription // Subscription for new log event
 	rmLogsSub      event.Subscription // Subscription for removed log event
 	pendingLogsSub event.Subscription // Subscription for pending log event
@@ -107,7 +107,7 @@ type EventSystem struct {
 	uninstall     chan *subscription         // remove filter for event notification
 	txsCh         chan core.NewTxsEvent      // Channel to receive new transactions event
 	logsCh        chan []*types.Log          // Channel to receive new log event
-	queuedTxsCh chan core.NewQueuedTxsEvent // Channel to receive new queued transactions event
+	queuedTxsCh   chan core.NewTxsEvent      // Channel to receive new queued transactions event
 	pendingLogsCh chan []*types.Log          // Channel to receive new log event
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
@@ -126,7 +126,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		install:       make(chan *subscription),
 		uninstall:     make(chan *subscription),
 		txsCh:         make(chan core.NewTxsEvent, txChanSize),
-		queuedTxsCh: make(chan core.NewQueuedTxsEvent, queuedTxChanSize),
+		queuedTxsCh:   make(chan core.NewTxsEvent, queuedTxChanSize),
 		logsCh:        make(chan []*types.Log, logsChanSize),
 		rmLogsCh:      make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh: make(chan []*types.Log, logsChanSize),
