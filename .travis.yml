@@ -79,5 +79,5 @@ jobs:
       - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin quay.io/amis
       - make docker
       - make docker.push
-      if: tag =~ ^indexer-([0-9]+.)+[0-9]+
+      if: tag =~ ^v([0-9]+.)+[0-9]+
       env: DOCKER_IMAGE_TAG="$TRAVIS_TAG"
